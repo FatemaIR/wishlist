@@ -1,12 +1,25 @@
 from django.shortcuts import render, redirect
-from items.models import Item
+from django.http import JsonResponse
+from items.models import Item, FavoriteItem
 from .forms import UserRegisterForm, UserLoginForm
 from django.contrib.auth import login, logout, authenticate
+from django.db.models import Q
 
 # Create your views here.
 def item_list(request):
+    items = Item.objects.all()
+    items_fav = []
+    if request.user.is_authenticated:
+        my_favs = FavoriteItem.objects.filter(user=request.user)
+        items_fav = [fav.item for fav in my_favs]
+
+    query = request.GET.get("q")
+    if query:
+        items = items.filter(name__contains=query)
+
     context = {
-        "items": Item.objects.all()
+        "items": items,
+        "items_fav": items_fav,
     }
     return render(request, 'item_list.html', context)
 
@@ -15,6 +28,42 @@ def item_detail(request, item_id):
         "item": Item.objects.get(id=item_id)
     }
     return render(request, 'item_detail.html', context)
+
+#to favorite the item
+def item_favorite(request, item_id):
+    item_obj = Item.objects.get(id=item_id)
+    fav_obj, created = FavoriteItem.objects.get_or_create(item=item_obj, user=request.user)
+
+    if created:
+        action = "fav"
+    else:
+        action = "unfav"
+        fav_obj.delete()
+    response = {
+        "action": action,
+    }
+    return JsonResponse(response)
+
+#save in wishlist
+def favorite_items(request):
+    if request.user.is_anonymous:
+        return redirect('signin')
+
+    items = Item.objects.all()
+    my_favs= FavoriteItem.objects.filter(user=request.user)
+    items_fav = [fav.item for fav in my_favs]
+
+    query = request.GET.get("q")
+    if query:
+        my_favs = FavoriteItem.objects.filter(item__name__contains=query)
+        items_fav = [fav.item for fav in my_favs]
+
+    context = {
+        "items_fav": items_fav,
+        "my_favs": my_favs,
+    }
+    
+    return render(request, 'favorite.html', context)
 
 def user_register(request):
     register_form = UserRegisterForm()
